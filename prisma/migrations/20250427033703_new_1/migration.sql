@@ -1,0 +1,25 @@
+-- CreateTable
+CREATE TABLE `room_manage` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `page1_id` INTEGER NOT NULL,
+    `room_id` INTEGER NOT NULL,
+    `check_in_date` DATETIME(3) NOT NULL,
+    `check_out_date` DATETIME(3) NOT NULL,
+    `organization_name` VARCHAR(191) NULL,
+    `status` VARCHAR(191) NOT NULL DEFAULT 'available',
+    `occupancy` INTEGER NOT NULL DEFAULT 1,
+    `price` INTEGER NOT NULL DEFAULT 0,
+    `total_price` INTEGER NOT NULL DEFAULT 0,
+    `capacity` INTEGER NOT NULL DEFAULT 2,
+    `nights` INTEGER NOT NULL DEFAULT 1,
+    `notes` TEXT NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updated_at` DATETIME(3) NOT NULL,
+
+    INDEX `room_manage_page1_id_idx`(`page1_id`),
+    INDEX `room_manage_room_id_idx`(`room_id`),
+    INDEX `room_manage_check_in_date_idx`(`check_in_date`),
+    INDEX `room_manage_check_out_date_idx`(`check_out_date`),
+    INDEX `room_manage_status_idx`(`status`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

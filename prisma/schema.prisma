@@ -1,0 +1,978 @@
+// This is your Prisma schema file
+// Learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               Int      @id @default(autoincrement())
+  user_id          String   @unique
+  user_name        String
+  user_pwd         String
+  value            String?
+  role             String?  @default("pending")
+  create_dtm       DateTime @default(now())
+  update_dtm       DateTime @updatedAt
+}
+
+model Page1 {
+  id               Int      @id @default(autoincrement())
+  reservation_status String
+  start_date       DateTime?
+  end_date         DateTime?
+  group_name       String?
+  customer_name    String?
+  total_count      Int?
+  email            String?
+  mobile_phone     String?
+  landline_phone   String?
+  notes            String?  @db.Text
+  reservation_manager String?
+  operation_manager String?
+  business_category String?
+  business_subcategory String?
+  business_detail_category String?
+  region           String?
+  is_mine_area     Boolean? @default(false)
+  create_dtm       DateTime @default(now())
+  create_user      String
+  update_dtm       DateTime @updatedAt
+  update_user      String
+  page2_reservations Page2[]
+  page3            Page3?
+  page4_expenses   Page4[]
+  page5_documents  Page5Document[]
+  page_final       PageFinal?
+}
+
+model Page2 {
+  id                 Int      @id @default(autoincrement())
+  page1_id           Int
+  page1              Page1    @relation(fields: [page1_id], references: [id])
+  male_count         Int?     @default(0)
+  female_count       Int?     @default(0)
+  total_count        Int?     @default(0)
+  male_leader_count  Int?     @default(0)
+  female_leader_count Int?    @default(0)
+  total_leader_count Int?     @default(0)
+  is_mou             Boolean? @default(false)
+  org_nature         String?
+  part_type          String?
+  age_type           String?
+  part_form          String?
+  service_type       String?
+  infant_count       Int?     @default(0)
+  elementary_count   Int?     @default(0)
+  middle_count       Int?     @default(0)
+  high_count         Int?     @default(0)
+  adult_count        Int?     @default(0)
+  elderly_count      Int?     @default(0)
+  age_group_total    Int?     @default(0)
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+  programs           Page2Program[]
+
+  @@map("page2_reservations")
+}
+
+model Page2Program {
+  id                Int      @id @default(autoincrement())
+  reservation_id    Int
+  reservation       Page2    @relation(fields: [reservation_id], references: [id], onDelete: Cascade)
+  category          String?
+  category_name     String?
+  program           String?
+  program_name      String?
+  date              DateTime?
+  start_time        String?
+  end_time          String?
+  duration          String?
+  place             String?
+  place_name        String?
+  instructor        String?
+  instructor_name   String?
+  assistant         String?
+  assistant_name    String?
+  helper            String?
+  helper_name       String?
+  notes             String?  @db.Text
+  price             Int?     @default(0)
+  participants      Int?     @default(0)
+  is_multi          Boolean? @default(false)
+  multi1_name       String?
+  multi2_name       String?
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  @@map("page2_programs")
+}
+
+model Page3 {
+  id                  Int      @id @default(autoincrement())
+  page1_id            Int      @unique
+  page1               Page1    @relation(fields: [page1_id], references: [id])
+  reservation_status  String
+  start_date          DateTime?
+  end_date            DateTime?
+  company_name        String?
+  department          String?
+  contact_person      String?
+  position            String?
+  participants_count  Int?
+  room_count          Int?
+  email               String?
+  phone               String?
+  purpose             String?
+  catering_required   Boolean  @default(false)
+  special_requirements String?  @db.Text
+  room_selections     Json?    
+  meal_plans          Json?
+  place_reservations  Json?
+  create_dtm          DateTime @default(now())
+  create_user         String
+  update_dtm          DateTime @updatedAt
+  update_user         String
+  alert_info          Json?    // Added to store alert information (open, message, type)
+}
+
+model Page4 {
+  id                 Int      @id @default(autoincrement())
+  project_name       String
+  created_by         String?
+  page1_id           Int?
+  page1              Page1?   @relation(fields: [page1_id], references: [id])
+  material_total     Int?     @default(0)
+  etc_expense_total  Int?     @default(0)
+  total_budget       Int?     @default(0)
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+  materials          Page4Material[]
+  expenses           Page4Expense[]
+
+  @@map("project4_main")
+  @@index([page1_id])
+}
+
+model Page4Material {
+  id                Int      @id @default(autoincrement())
+  expense_id        Int
+  expense           Page4    @relation(fields: [expense_id], references: [id], onDelete: Cascade)
+  material_type     String
+  name              String?
+  amount            Int
+  quantity          Int
+  total             Int
+  note              String?  @db.Text
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  @@map("project4_materials")
+  @@index([expense_id])
+}
+
+model Page4Expense {
+  id                Int      @id @default(autoincrement())
+  expense_id        Int
+  expense           Page4    @relation(fields: [expense_id], references: [id], onDelete: Cascade)
+  name              String
+  amount            Int
+  expense_type      String?
+  quantity          String?
+  price             String?
+  note              String?  @db.Text
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  @@map("project4_expenses")
+  @@index([expense_id])
+}
+
+// Added model for notifications management across all pages
+model AlertNotification {
+  id                Int      @id @default(autoincrement())
+  page_id           Int      // ID of the associated page
+  page_type         String   // Type of page (page1, page2, page3, page4)
+  message           String   @db.Text
+  type              String   @default("info") // severity type: info, warning, error, success
+  is_read           Boolean  @default(false)
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  @@index([page_id, page_type])
+}
+
+// Page5 Document model
+model Page5Document {
+  id                Int      @id @default(autoincrement())
+  page1_id          Int
+  page1             Page1    @relation(fields: [page1_id], references: [id])
+  document_type     String   // contract, invoice, receipt, etc.
+  status            String   @default("draft") // draft, sent, signed, paid, etc.
+  organization_name String
+  contact_name      String?
+  contact_email     String?
+  contact_phone     String?
+  reservation_date  DateTime?
+  reservation_code  String?
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  @@map("page5_documents")
+  @@index([page1_id])
+}
+
+// Added models from new3.sql
+model Project3Room {
+  id                Int      @id @default(autoincrement())
+  name              String
+  room_type         String
+  capacity          Int      @default(2)
+  price_per_night   Decimal  @db.Decimal(10,2)
+  description       String?  @db.Text
+  is_active         Boolean  @default(true)
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  reservations      Project3Reservation[]
+
+  @@map("project3_rooms")
+}
+
+model Project3Place {
+  id                Int      @id @default(autoincrement())
+  name              String
+  capacity          Int      @default(0)
+  price_per_hour    Decimal  @db.Decimal(10,2)
+  description       String?  @db.Text
+  is_active         Boolean  @default(true)
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  reservations      Project3Reservation[]
+
+  @@map("project3_places")
+}
+
+model Project3MealOption {
+  id                Int      @id @default(autoincrement())
+  meal_type         String
+  meal_option       String
+  price_per_person  Decimal  @db.Decimal(10,2)
+  description       String?  @db.Text
+  is_active         Boolean  @default(true)
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  reservations      Project3Reservation[]
+
+  @@map("project3_meal_options")
+}
+
+model Project3Reservation {
+  id                Int      @id @default(autoincrement())
+  page1_id          Int?
+  room_id           Int?
+  meal_option_id    Int?
+  place_id          Int?
+  total_amount      Decimal? @default(0.00) @db.Decimal(10,2)
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+  
+  room              Project3Room?     @relation(fields: [room_id], references: [id])
+  meal_option       Project3MealOption? @relation(fields: [meal_option_id], references: [id])
+  place             Project3Place?    @relation(fields: [place_id], references: [id])
+
+  @@index([page1_id])
+  @@index([room_id])
+  @@index([meal_option_id])
+  @@index([place_id])
+  @@map("project3_reservations")
+}
+
+// === Menu System Models (from create_new_menus_tables.sql) ===
+
+model ProgramCategory {
+  id              Int           @id @default(autoincrement())
+  category_name   String        @db.VarChar(100)
+  description     String?       @db.Text
+  display_order   Int?          @default(0)
+  created_at      DateTime      @default(now())
+  updated_at      DateTime      @updatedAt
+  programs        ProgramItem[]
+
+  @@map("program_new_menus_categories")
+}
+
+model ProgramItem {
+  id              Int             @id @default(autoincrement())
+  category_id     Int
+  program_name    String          @db.VarChar(255)
+  description     String?         @db.Text
+  display_order   Int?            @default(0)
+  created_at      DateTime        @default(now())
+  updated_at      DateTime        @updatedAt
+  category        ProgramCategory @relation(fields: [category_id], references: [id], onDelete: Cascade)
+
+  @@index([category_id])
+  @@map("program_new_menus_items")
+}
+
+model LocationCategory {
+  id              Int        @id @default(autoincrement())
+  category_name   String     @db.VarChar(100)
+  description     String?    @db.Text
+  display_order   Int?       @default(0)
+  created_at      DateTime   @default(now())
+  updated_at      DateTime   @updatedAt
+  locations       Location[]
+
+  @@map("program_new_menus_location_categories")
+}
+
+model Location {
+  id              Int               @id @default(autoincrement())
+  location_name   String            @db.VarChar(255)
+  category_id     Int?
+  capacity        Int?
+  description     String?           @db.Text
+  display_order   Int?              @default(0)
+  created_at      DateTime          @default(now())
+  updated_at      DateTime          @updatedAt
+  category        LocationCategory? @relation(fields: [category_id], references: [id], onDelete: SetNull)
+
+  @@index([category_id])
+  @@map("program_new_menus_locations")
+}
+
+model Instructor {
+  id              Int       @id @default(autoincrement())
+  name            String    @db.VarChar(100)
+  type            String?   @db.VarChar(50) @default("일반") // 일반, 기타소득
+  category        String?   @db.VarChar(50) @default("강사") // 강사, 헬퍼
+  payment_rate    Int?      @default(200000) // 기본 강사비
+  payment         Int?      @default(0) // 실제 지급 금액
+  tax_rate        Float?    @default(0.033) // 세금 공제율
+  specialty       String?   @db.VarChar(255)
+  phone           String?   @db.VarChar(50)
+  email           String?   @db.VarChar(100)
+  description     String?   @db.Text
+  bank_info       String?   @db.VarChar(255) // 은행 계좌 정보
+  address         String?   @db.Text // 주소
+  contact         String?   @db.VarChar(100) // 비상 연락처
+  notes           String?   @db.Text // 기타 참고사항
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+
+  @@map("program_new_menus_instructors")
+}
+
+model AssistantInstructor {
+  id              Int       @id @default(autoincrement())
+  name            String    @db.VarChar(100)
+  specialty       String?   @db.VarChar(255)
+  phone           String?   @db.VarChar(50)
+  email           String?   @db.VarChar(100)
+  description     String?   @db.Text
+  payment_rate    Int?      @default(60000) // 고정 보조강사비 60,000원 (공제 없음)
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+
+  @@map("program_new_menus_assistant_instructors")
+}
+
+model Helper {
+  id              Int       @id @default(autoincrement())
+  name            String    @db.VarChar(100)
+  specialty       String?   @db.VarChar(255)
+  phone           String?   @db.VarChar(50)
+  email           String?   @db.VarChar(100)
+  description     String?   @db.Text
+  payment_rate    Int?      @default(50000) // 고정 활동비 50,000원 (공제 없음)
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+
+  @@map("program_new_menus_helpers")
+}
+
+model MenuRoom {
+  id              Int       @id @default(autoincrement())
+  room_type       String    @db.VarChar(50)
+  room_name       String    @db.VarChar(100)
+  capacity        Int       @default(2)
+  price           Int       @default(0)
+  description     String?   @db.Text
+  is_available    Boolean   @default(true)
+  facilities      String?   @db.Text
+  display_order   Int       @default(0)
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+
+  @@map("program_new_menus_rooms")
+}
+
+// Consolidated Form models replacing existing form models
+model ServiceForm {
+  id               Int      @id @default(autoincrement())
+  agency           String
+  agency_id        Int?
+  openday          String
+  eval_date        String
+  ptcprogram       String?
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  service_seq       Int?
+  sex               String?
+  age               String?
+  residence         String?
+  job               String?
+  score1            String?
+  score2            String?
+  score3            String?
+  score4            String?
+  score5            String?
+  score6            String?
+  score7            String?
+  score8            String?
+  score9            String?
+  score10           String?
+  score11           String?
+  score12           String?
+  score13           String?
+  score14           String?
+  score15           String?
+  score16           String?
+  score17           String?
+  score18           String?
+  score19           String?
+  score20           String?
+  facility_opinion  String?  @db.Text
+  score21           String?
+  score22           String?
+  score23           String?
+  score24           String?
+  score25           String?
+  score26           String?
+  operation_opinion String?  @db.Text
+  score27           String?
+  score28           String?
+
+  @@map("service_forms")
+}
+
+model ProgramForm {
+  id               Int      @id @default(autoincrement())
+  agency           String
+  agency_id        Int?
+  openday          String
+  eval_date        String
+  ptcprogram       String?
+  program_id       Int?
+  program_category_id Int?
+  teacher_id       Int?
+  place            String?
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  program_seq       Int?
+  sex               String?
+  age               String?
+  residence         String?
+  job               String?
+  type              String?  @default("참여자")
+  score1            String?
+  score2            String?
+  score3            String?
+  score4            String?
+  score5            String?
+  score6            String?
+  score7            String?
+  score8            String?
+  score9            String?
+  score10           String?
+  score11           String?
+  score12           String?
+  expectation       String?  @db.Text
+  improvement       String?  @db.Text
+
+  @@map("program_forms")
+}
+
+model CounselTherapyForm {
+  id               Int      @id @default(autoincrement())
+  agency           String
+  agency_id        Int?
+  name             String?
+  openday          String
+  eval_date        String
+  ptcprogram       String?
+  counsel_contents String?  @db.Text
+  session1         String?
+  session2         String?
+  pv               String?
+  past_stress_experience String?
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  counsel_therapy_seq    Int?
+  sex                    String?
+  age                    String?
+  residence              String?
+  job                    String?
+  past_experience        String?
+  score1                 String?
+  score2                 String?
+  score3                 String?
+  score4                 String?
+  score5                 String?
+  score6                 String?
+  score7                 String?
+  score8                 String?
+  score9                 String?
+  score10                String?
+  score11                String?
+  score12                String?
+  score13                String?
+  score14                String?
+  score15                String?
+  score16                String?
+  score17                String?
+  score18                String?
+  score19                String?
+  score20                String?
+  score21                String?
+  score22                String?
+  score23                String?
+  score24                String?
+  score25                String?
+  score26                String?
+  score27                String?
+  score28                String?
+  score29                String?
+  score30                String?
+  score31                String?
+  score32                String?
+  score33                String?
+  score34                String?
+  score35                String?
+  score36                String?
+  score37                String?
+  score38                String?
+  score39                String?
+  score40                String?
+  score41                String?
+  score42                String?
+  score43                String?
+  score44                String?
+  score45                String?
+  score46                String?
+  score47                String?
+  score48                String?
+  score49                String?
+  score50                String?
+  score51                String?
+  score52                String?
+  score53                String?
+  score54                String?
+  score55                String?
+  score56                String?
+  score57                String?
+  score58                String?
+  score59                String?
+  score60                String?
+  score61                String?
+  score62                String?
+
+  @@map("counsel_therapy_forms")
+}
+
+model PreventForm {
+  id               Int      @id @default(autoincrement())
+  agency           String
+  agency_id        Int?
+  name             String?
+  openday          String
+  eval_date        String
+  ptcprogram       String?
+  prevent_contents String?
+  pv               String?
+  past_stress_experience String?
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  prevent_seq       Int?
+  sex               String?
+  age               String?
+  residence         String?
+  job               String?
+  score1            String?
+  score2            String?
+  score3            String?
+  score4            String?
+  score5            String?
+  score6            String?
+  score7            String?
+  score8            String?
+  score9            String?
+  score10           String?
+  score11           String?
+  score12           String?
+  score13           String?
+  score14           String?
+  score15           String?
+  score16           String?
+  score17           String?
+  score18           String?
+  score19           String?
+  score20           String?
+
+  @@map("prevent_forms")
+}
+
+model HealingForm {
+  id               Int      @id @default(autoincrement())
+  agency           String
+  agency_id        Int?
+  name             String?
+  openday          String
+  eval_date        String
+  ptcprogram       String?
+  pv               String?
+  past_stress_experience String?
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  healing_seq       Int?
+  sex               String?
+  age               String?
+  residence         String?
+  job               String?
+  score1            String?
+  score2            String?
+  score3            String?
+  score4            String?
+  score5            String?
+  score6            String?
+  score7            String?
+  score8            String?
+  score9            String?
+  score10           String?
+  score11           String?
+  score12           String?
+  score13           String?
+  score14           String?
+  score15           String?
+  score16           String?
+  score17           String?
+  score18           String?
+  score19           String?
+  score20           String?
+  score21           String?
+  score22           String?
+
+  @@map("healing_forms")
+}
+
+model HrvForm {
+  id               Int      @id @default(autoincrement())
+  agency           String
+  agency_id        Int?
+  name             String?
+  openday          String
+  eval_date        String
+  ptcprogram       String?
+  pv               String?
+  identification_number String?
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  hrv_seq           Int?
+  sex               String?
+  age               String?
+  residence         String?
+  job               String?
+  score1            String?  // 자율신경활성도
+  score2            String?  // 자율신경균형도
+  score3            String?  // 스트레스저항도
+  score4            String?  // 스트레스지수
+  score5            String?  // 피로도지수
+  score6            String?  // 평균심박동수
+  score7            String?  // 심장안정도
+  score8            String?  // 이상심박동수
+
+  @@map("hrv_forms")
+}
+
+model VibraForm {
+  id               Int      @id @default(autoincrement())
+  agency           String
+  agency_id        Int?
+  name             String?
+  openday          String
+  eval_date        String
+  ptcprogram       String?
+  pv               String?
+  identification_number String?
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  vibra_seq         Int?
+  sex               String?
+  age               String?
+  residence         String?
+  job               String?
+  score1            String?  // 적극공격성
+  score2            String?  // 스트레스
+  score3            String?  // 불안
+  score4            String?  // 의심
+  score5            String?  // 밸런스
+  score6            String?  // 카리스마
+  score7            String?  // 에너지
+  score8            String?  // 자기조절
+  score9            String?  // 억제
+  score10           String?  // 신경증
+
+  @@map("vibra_forms")
+}
+
+// Adding UserTemp models
+model UserTemp {
+  id         Int      @id @default(autoincrement())
+  seq        String?  @db.VarChar(50)
+  name       String?  @db.VarChar(100)
+  sex        String?  @db.VarChar(20)
+  age        String?  @db.VarChar(20)
+  residence  String?  @db.VarChar(50)
+  job        String?  @db.VarChar(50)
+  agency     String   @db.VarChar(100)
+  openday    String   @db.VarChar(50)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([agency, openday])
+  @@map("user_temp")
+}
+
+model UserTempAgency {
+  id         Int      @id @default(autoincrement())
+  agency     String   @db.VarChar(100)
+  openday    String   @db.VarChar(50)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@unique([agency, openday])
+  @@map("user_temp_agency")
+}
+
+// Page6 - 프로그램 일정표 관련 모델
+model ProgramSchedule {
+  id            Int      @id @default(autoincrement())
+  reservation_id Int
+  group_name    String
+  start_date    DateTime
+  end_date      DateTime
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+  programs      ScheduleProgram[]
+}
+
+model ScheduleProgram {
+  id            Int      @id @default(autoincrement())
+  schedule_id   Int
+  schedule      ProgramSchedule @relation(fields: [schedule_id], references: [id], onDelete: Cascade)
+  day           Int
+  time_slot     String
+  program_name  String
+  location      String?
+  instructor    String?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+}
+
+// Page6 - 숙소 배정 관련 모델
+model Room {
+  id          Int      @id @default(autoincrement())
+  room_name   String
+  room_type   String
+  capacity    Int
+  floor       Int
+  status      String   @default("active")
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+  assignments RoomAssignment[]
+}
+
+model RoomAssignment {
+  id            Int      @id @default(autoincrement())
+  reservation_id Int
+  room_id       Int
+  room          Room     @relation(fields: [room_id], references: [id], onDelete: Cascade)
+  room_name     String
+  floor         Int
+  date          DateTime
+  organization  String
+  occupancy     Int      @default(1)
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  @@unique([room_id, date])
+}
+
+// PageFinal model
+model PageFinal {
+  id                 Int      @id @default(autoincrement())
+  page1_id           Int      @unique
+  page1              Page1    @relation(fields: [page1_id], references: [id], onDelete: Cascade)
+  teacher_expenses   TeacherExpense[]
+  participant_expenses ParticipantExpense[]
+  income_items       IncomeItem[]
+  discount_rate      Float?
+  discount_notes     String?
+  complaint          String?  @db.Text
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  @@map("page_final")
+  @@index([page1_id])
+}
+
+// Teacher Expense Item model
+model TeacherExpense {
+  id                 Int      @id @default(autoincrement())
+  page_final_id      Int
+  page_final         PageFinal @relation(fields: [page_final_id], references: [id], onDelete: Cascade)
+  category           String   // 강사비, 보조강사비, 교통비, 식사비 등
+  amount             Int
+  details            String?
+  notes              String?
+  is_planned         Boolean  @default(false) // true for planned, false for executed
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  @@map("teacher_expenses")
+  @@index([page_final_id])
+}
+
+// Participant Expense Item model
+model ParticipantExpense {
+  id                 Int      @id @default(autoincrement())
+  page_final_id      Int
+  page_final         PageFinal @relation(fields: [page_final_id], references: [id], onDelete: Cascade)
+  category           String   // 숙박비, 식사비, 재료비, 기타비 등
+  amount             Int
+  details            String?
+  notes              String?
+  is_planned         Boolean  @default(false) // true for planned, false for executed
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  @@map("participant_expenses")
+  @@index([page_final_id])
+}
+
+// Income Item model
+model IncomeItem {
+  id                 Int      @id @default(autoincrement())
+  page_final_id      Int
+  page_final         PageFinal @relation(fields: [page_final_id], references: [id], onDelete: Cascade)
+  category           String   // 프로그램, 숙박비, 식사비, 재료비, 기타 등
+  amount             Int
+  details            String?
+  notes              String?
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  @@map("income_items")
+  @@index([page_final_id])
+}
+
+// New models for participant data in page3
+model ParticipantRoom {
+  id                Int      @id @default(autoincrement())
+  page1_id          Int
+  room_type         String   // 객실 유형 (일반, 기타 등)
+  count             Int      @default(0) // 객실 수량
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  @@index([page1_id])
+  @@map("participant_rooms")
+}
+
+model ParticipantMeal {
+  id                Int      @id @default(autoincrement())
+  page1_id          Int
+  meal_type         String   // 식사 유형 (식사횟수, 기타 등)
+  count             Int      @default(0) // 인원 수량
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  @@index([page1_id])
+  @@map("participant_meals")
+}
+
+// Room Availability model for page3 room management
+model RoomAvailability {
+  id                 Int      @id @default(autoincrement())
+  page1_id           Int
+  room_id            Int      // Reference to MenuRoom.id
+  check_in_date      DateTime
+  check_out_date     DateTime
+  organization_name  String?
+  status             String   @default("reserved") // reserved, cancelled, etc.
+  notes              String?  @db.Text
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  @@index([page1_id])
+  @@index([room_id])
+  @@index([check_in_date, check_out_date])
+  @@map("room_availability")
+}
+
+// Room Management model for page3 detailed room tracking
+model RoomManage {
+  id                 Int      @id @default(autoincrement())
+  page1_id           Int
+  room_id            Int      // Reference to MenuRoom.id
+  check_in_date      DateTime
+  check_out_date     DateTime
+  organization_name  String?
+  status             String   @default("available") // available, occupied, maintenance, etc.
+  occupancy          Int      @default(1)
+  price              Int      @default(0)
+  total_price        Int      @default(0)
+  capacity           Int      @default(2)
+  nights             Int      @default(1)
+  notes              String?  @db.Text
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  @@index([page1_id])
+  @@index([room_id])
+  @@index([check_in_date])
+  @@index([check_out_date])
+  @@index([status])
+  @@map("room_manage")
+} 
+
+
+model UserActivity {
+  id          Int      @id @default(autoincrement())
+  user_id     Int
+  user_name   String
+  action      String   // view, create, update, delete, login, logout
+  action_target String  // The target of the action (e.g., "프로그램 만족도 입력")
+  target_id   String?  // Optional ID of the target entity
+  description String?  // Optional detailed description
+  ip_address  String?  // IP address of the client
+  created_at  DateTime @default(now())
+
+  @@map("user_activities")
+}
