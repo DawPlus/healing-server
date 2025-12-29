@@ -61,3 +61,11 @@ public/uploads/
 .cache/
 .parcel-cache/
 .eslintcache
+
+# macOS system files
+__MACOSX/
+_MACOSX/
+
+# Temporary folders
+무제 폴더/
+무제폴더/
