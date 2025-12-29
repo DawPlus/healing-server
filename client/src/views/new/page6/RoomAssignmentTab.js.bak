@@ -1,0 +1,1850 @@
+import React, { useState, useEffect } from 'react';
+import { useQuery, useMutation, useApolloClient } from '@apollo/client';
+import {
+  Box,
+  Typography,
+  Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Grid,
+  TextField,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  CircularProgress,
+  Alert,
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  IconButton,
+  Tabs,
+  Tab,
+  Divider,
+  Card,
+  CardContent,
+  CardHeader,
+  Stack,
+  Chip,
+  useTheme,
+  Tooltip,
+  ToggleButtonGroup,
+  ToggleButton,
+  Badge,
+  Drawer,
+  List,
+  ListItem,
+  ListItemText,
+  TableFooter
+} from '@mui/material';
+import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
+import { AdapterMoment } from '@mui/x-date-pickers/AdapterMoment';
+import moment from 'moment';
+import 'moment/locale/ko';
+import EventNoteIcon from '@mui/icons-material/EventNote';
+import HotelIcon from '@mui/icons-material/Hotel';
+import RestaurantIcon from '@mui/icons-material/Restaurant';
+import PrintIcon from '@mui/icons-material/Print';
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
+import SaveIcon from '@mui/icons-material/Save';
+import DeleteIcon from '@mui/icons-material/Delete';
+import MeetingRoomIcon from '@mui/icons-material/MeetingRoom';
+import SearchIcon from '@mui/icons-material/Search';
+import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import ViewListIcon from '@mui/icons-material/ViewList';
+import ViewModuleIcon from '@mui/icons-material/ViewModule';
+import InfoIcon from '@mui/icons-material/Info';
+import AssignmentIcon from '@mui/icons-material/Assignment';
+import GroupIcon from '@mui/icons-material/Group';
+import GetAppIcon from '@mui/icons-material/GetApp';
+import Swal from 'sweetalert2';
+import * as XLSX from 'xlsx-js-style';
+import { formatNumber } from './services/dataService';
+
+import Page6Layout from './components/Page6Layout';
+import { GET_PAGE6_RESERVATION_LIST, GET_PAGE6_ROOM_ASSIGNMENTS, GET_PAGE6_RESERVATION_DETAIL, GET_PAGE6_MEAL_STAFF } from './graphql/queries';
+import { SAVE_ROOM_ASSIGNMENT, DELETE_ROOM_ASSIGNMENT } from './graphql/mutations';
+import { formatDate, generateDateRange, showAlert } from './services/dataService';
+import { exportRoomMealPdf } from '../Page5/inspection/roomMealPdf';
+
+// Korean day of week labels
+const DAYS_OF_WEEK = ['일', '월', '화', '수', '목', '금', '토'];
+
+// TabPanel component for handling tab content
+function TabPanel(props) {
+  const { children, value, index, ...other } = props;
+
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`simple-tabpanel-${index}`}
+      aria-labelledby={`simple-tab-${index}`}
+      {...other}
+    >
+      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
+    </div>
+  );
+}
+
+// Add these functions to parse JSON data and create accommodation and meal sections
+const parseJsonData = (jsonData) => {
+  if (!jsonData) return [];
+  if (typeof jsonData === 'string') {
+    try {
+      return JSON.parse(jsonData);
+    } catch (e) {
+      console.error('Error parsing JSON:', e);
+      return [];
+    }
+  }
+  return jsonData;
+};
+
+// Create accommodation section data for display
+const createAccommodationSection = (roomSelections) => {
+  const rows = [];
+  let totalRoomPrice = 0;
+  
+  if (roomSelections && roomSelections.length > 0) {
+    const groupedByDate = {};
+    
+    // Group by date
+    roomSelections.forEach(room => {
+      const date = moment(room.check_in_date).format('MM월 DD일');
+      if (!groupedByDate[date]) {
+        groupedByDate[date] = [];
+      }
+      groupedByDate[date].push(room);
+    });
+    
+    // Create rows from grouped data
+    Object.entries(groupedByDate).forEach(([date, rooms]) => {
+      rooms.forEach((room, idx) => {
+        const price = room.price || 0;
+        const occupancy = room.occupancy || 0;
+        const subtotal = price * occupancy;
+        const discount = 0;
+        const total = subtotal - discount;
+        
+        totalRoomPrice += total;
+        
+        rows.push({
+          date: idx === 0 ? date : '',
+          roomType: room.room_type || room.room_name,
+          people: '',
+          roomCount: occupancy,
+          nights: '1',
+          unitPrice: price,
+          subtotal: subtotal,
+          discount: discount,
+          total: total,
+          notes: ''
+        });
+      });
+    });
+  }
+  
+  return {
+    rows,
+    totalRoomPrice
+  };
+};
+
+// Create meal section data for display
+const createMealSection = (mealPlans) => {
+  const rows = [];
+  let totalMealPrice = 0;
+  
+  if (mealPlans && mealPlans.length > 0) {
+    // Group by meal type
+    const groupedByType = {};
+    
+    mealPlans.forEach(meal => {
+      const type = meal.meal_type || '기타';
+      if (!groupedByType[type]) {
+        groupedByType[type] = [];
+      }
+      groupedByType[type].push(meal);
+    });
+    
+    // Create rows from grouped data
+    Object.entries(groupedByType).forEach(([type, meals]) => {
+      meals.forEach((meal, idx) => {
+        const price = meal.price || 0;
+        const participants = meal.participants || 0;
+        const subtotal = price * participants;
+        const discount = 0;
+        const total = subtotal - discount;
+        
+        totalMealPrice += total;
+        
+        const koreanType = 
+          type === 'breakfast' ? '조식' : 
+          type === 'lunch' ? '중식' : 
+          type === 'dinner' ? '석식' : type;
+        
+        rows.push({
+          type: idx === 0 ? koreanType : '',
+          menu: meal.meal_option || '일반식',
+          count: '1',
+          people: participants,
+          unitPrice: price,
+          subtotal: subtotal,
+          discount: discount,
+          total: total,
+          notes: '',
+          date: meal.date
+        });
+      });
+    });
+  }
+  
+  return {
+    rows,
+    totalMealPrice
+  };
+};
+
+const RoomAssignmentTab = () => {
+  const theme = useTheme();
+  const client = useApolloClient();
+  const [selectedDate, setSelectedDate] = useState(moment());
+  const [startDate, setStartDate] = useState(moment().startOf('month'));
+  const [endDate, setEndDate] = useState(moment().endOf('month'));
+  const [dateRange, setDateRange] = useState([]);
+  const [selectedReservation, setSelectedReservation] = useState(null);
+  const [selectedRoom, setSelectedRoom] = useState(null);
+  const [assignmentData, setAssignmentData] = useState({
+    reservation_id: '',
+    organization: '',
+    occupancy: 1
+  });
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [tabValue, setTabValue] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showAllReservations, setShowAllReservations] = useState(true);
+  const [monthDate, setMonthDate] = useState(moment());
+  const [viewType, setViewType] = useState('calendar'); // 'calendar' or 'list'
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [selectedDay, setSelectedDay] = useState(null);
+  const [dayData, setDayData] = useState({ rooms: [], meals: [] });
+
+  // Add new state variables for inspection tab
+  const [inspectionTabValue, setInspectionTabValue] = useState(0); // 0 = rooms, 1 = meals
+  const [inspectionSearchTerm, setInspectionSearchTerm] = useState('');
+  const [inspectionSelectedReservation, setInspectionSelectedReservation] = useState(null);
+  const [inspectionExcelLoading, setInspectionExcelLoading] = useState(false);
+  const [accommodationData, setAccommodationData] = useState({ rows: [], totalRoomPrice: 0 });
+  const [inspectionMealData, setInspectionMealData] = useState({ rows: [], totalMealPrice: 0 });
+
+  // Get reservation list
+  const { 
+    loading: loadingReservations, 
+    error: errorReservations, 
+    data: reservationListData 
+  } = useQuery(GET_PAGE6_RESERVATION_LIST, {
+    fetchPolicy: 'network-only'
+  });
+  
+  // Get room assignments
+  const { 
+    loading: loadingRooms, 
+    error: errorRooms, 
+    data: roomData,
+    refetch: refetchRooms
+  } = useQuery(GET_PAGE6_ROOM_ASSIGNMENTS, {
+    variables: { 
+      startDate: startDate.format('YYYY-MM-DD'), 
+      endDate: endDate.format('YYYY-MM-DD')
+    },
+    fetchPolicy: 'network-only'
+  });
+  
+  // Get meal staff data
+  const {
+    loading: loadingMeals,
+    error: errorMeals,
+    data: mealData,
+    refetch: refetchMeals
+  } = useQuery(GET_PAGE6_MEAL_STAFF, {
+    variables: {
+      startDate: startDate.format('YYYY-MM-DD'),
+      endDate: endDate.format('YYYY-MM-DD'),
+      reservationId: selectedReservation?.id || null
+    },
+    fetchPolicy: 'network-only'
+  });
+  
+  // Get selected reservation details
+  const {
+    loading: loadingReservationDetail, 
+    error: errorReservationDetail, 
+    data: reservationDetailData 
+  } = useQuery(GET_PAGE6_RESERVATION_DETAIL, {
+    variables: { id: selectedReservation?.id },
+    skip: !selectedReservation?.id,
+    fetchPolicy: 'network-only'
+  });
+  
+  // Mutations
+  const [saveRoomAssignment, { loading: savingAssignment }] = useMutation(SAVE_ROOM_ASSIGNMENT, {
+    onCompleted: () => {
+      showAlert('객실 배정이 저장되었습니다.', 'success');
+      refetchRooms();
+      handleCloseDialog();
+    },
+    onError: (error) => {
+      showAlert(`객실 배정 저장 실패: ${error.message}`, 'error');
+    }
+  });
+  
+  const [deleteRoomAssignment, { loading: deletingAssignment }] = useMutation(DELETE_ROOM_ASSIGNMENT, {
+    onCompleted: () => {
+      showAlert('객실 배정이 삭제되었습니다.', 'success');
+      refetchRooms();
+    },
+    onError: (error) => {
+      showAlert(`객실 배정 삭제 실패: ${error.message}`, 'error');
+    }
+  });
+  
+  // Update date range when dates change
+  useEffect(() => {
+    if (startDate && endDate) {
+      setDateRange(generateDateRange(startDate, endDate));
+    }
+  }, [startDate, endDate]);
+  
+  // Refetch data when date range changes
+  useEffect(() => {
+    if (refetchRooms) {
+      refetchRooms({
+        startDate: startDate.format('YYYY-MM-DD'),
+        endDate: endDate.format('YYYY-MM-DD')
+      });
+    }
+    
+    if (refetchMeals) {
+      refetchMeals({
+        startDate: startDate.format('YYYY-MM-DD'),
+        endDate: endDate.format('YYYY-MM-DD'),
+        reservationId: selectedReservation?.id || null
+      });
+    }
+  }, [startDate, endDate, selectedReservation, refetchRooms, refetchMeals]);
+  
+  // Process reservation data
+  useEffect(() => {
+    if (reservationListData?.getPage1List) {
+      // Select upcoming reservation if none selected
+      const currentDate = moment();
+      const upcomingReservations = reservationListData.getPage1List
+        .filter(reservation => moment(reservation.end_date).isSameOrAfter(currentDate))
+        .sort((a, b) => moment(a.start_date).diff(moment(b.start_date)));
+        
+      if (upcomingReservations.length > 0 && !selectedReservation) {
+        setSelectedReservation(upcomingReservations[0]);
+      }
+    }
+  }, [reservationListData, selectedReservation]);
+  
+  // Tab change handler
+  const handleTabChange = (event, newValue) => {
+    setTabValue(newValue);
+  };
+  
+  // Handle view type change (calendar or list)
+  const handleViewTypeChange = (event, newViewType) => {
+    if (newViewType !== null) {
+      setViewType(newViewType);
+    }
+  };
+  
+  // Handle date range change
+  const handleDateRangeChange = (period) => {
+    let newStartDate, newEndDate;
+    
+    switch (period) {
+      case 'month':
+        newStartDate = moment().startOf('month');
+        newEndDate = moment().endOf('month');
+        break;
+      case 'next-month':
+        newStartDate = moment().add(1, 'month').startOf('month');
+        newEndDate = moment().add(1, 'month').endOf('month');
+        break;
+      case 'two-months':
+        newStartDate = moment().startOf('month');
+        newEndDate = moment().add(1, 'month').endOf('month');
+        break;
+      default:
+        newStartDate = moment().startOf('month');
+        newEndDate = moment().endOf('month');
+    }
+    
+    setStartDate(newStartDate);
+    setEndDate(newEndDate);
+    setMonthDate(newStartDate);
+  };
+  
+  // Selected reservation change handler
+  const handleReservationChange = (event) => {
+    const reservationId = event.target.value;
+    
+    if (reservationId === 'all') {
+      setSelectedReservation(null);
+      setShowAllReservations(true);
+    } else {
+      const reservation = reservationListData.getPage1List.find(r => r.id === parseInt(reservationId));
+      
+      if (reservation) {
+        setSelectedReservation(reservation);
+        setShowAllReservations(false);
+        
+        // Adjust date range to match reservation period
+        const reservationStart = moment(reservation.start_date);
+        const reservationEnd = moment(reservation.end_date);
+        
+        // Expand to include the month
+        const start = moment(reservationStart).startOf('month');
+        const end = moment(reservationEnd).endOf('month');
+        
+        setStartDate(start);
+        setEndDate(end);
+      }
+    }
+  };
+  
+  // Dialog open handler for room assignment
+  const handleOpenAssignmentDialog = (room, date) => {
+    if (!selectedReservation) {
+      showAlert('먼저 단체를 선택해주세요.', 'warning');
+      return;
+    }
+    
+    setSelectedRoom(room);
+    setSelectedDate(moment(date));
+    
+    // Check if there's an existing assignment
+    const existingAssignment = room.assignments[date];
+    
+    setAssignmentData({
+      reservation_id: selectedReservation.id,
+      organization: selectedReservation.group_name,
+      occupancy: existingAssignment ? existingAssignment.occupancy : 1
+    });
+    
+    setDialogOpen(true);
+  };
+  
+  // Dialog close handler
+  const handleCloseDialog = () => {
+    setDialogOpen(false);
+    setSelectedRoom(null);
+  };
+  
+  // Handle change in assignment occupancy
+  const handleAssignmentDataChange = (field, value) => {
+    setAssignmentData({
+      ...assignmentData,
+      [field]: value
+    });
+  };
+  
+  // Save room assignment
+  const handleSaveAssignment = () => {
+    if (!selectedRoom || !selectedDate) return;
+    
+    saveRoomAssignment({
+      variables: {
+        roomAssignment: {
+          reservation_id: parseInt(assignmentData.reservation_id),
+          room_id: parseInt(selectedRoom.room_id),
+          room_name: selectedRoom.room_name,
+          floor: parseInt(selectedRoom.floor),
+          date: selectedDate.format('YYYY-MM-DD'),
+          organization: assignmentData.organization,
+          occupancy: parseInt(assignmentData.occupancy)
+        }
+      }
+    });
+  };
+  
+  // Delete room assignment
+  const handleDeleteAssignment = (room, date) => {
+    if (!room.assignments[date] || !room.assignments[date].id) return;
+    
+    if (window.confirm('이 배정을 삭제하시겠습니까?')) {
+      deleteRoomAssignment({
+        variables: {
+          id: room.assignments[date].id
+        }
+      });
+    }
+  };
+  
+  // PDF export handler for room assignments and meal staff
+  const handleRoomMealPdf = async () => {
+    if (!selectedReservation) {
+      showAlert('단체를 선택해주세요.', 'warning');
+      return;
+    }
+    
+    try {
+      setPdfLoading(true);
+      
+      // PDF 내보내기용 상세 데이터 가져오기
+      const { data: detailData } = await client.query({
+        query: GET_PAGE6_RESERVATION_DETAIL,
+        variables: { id: selectedReservation.id },
+        fetchPolicy: 'network-only'
+      });
+      
+      if (!detailData) {
+        throw new Error('단체 상세 정보를 불러올 수 없습니다.');
+      }
+      
+      // PDF 내보내기 함수 호출
+      const success = exportRoomMealPdf(detailData);
+      
+      if (success) {
+        showAlert('숙소 배정 및 식사 인원 PDF가 생성되었습니다.', 'success');
+      } else {
+        throw new Error('PDF 파일 생성 중 오류가 발생했습니다.');
+      }
+    } catch (error) {
+      console.error('PDF export error:', error);
+      showAlert('PDF 생성 중 오류가 발생했습니다: ' + error.message, 'error');
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+  
+  // Process room data
+  const processRoomData = () => {
+    if (!roomData || !roomData.getRoomAssignments) return [];
+    
+    // Group rooms by floor
+    const roomsByFloor = roomData.getRoomAssignments.reduce((acc, room) => {
+      const floor = room.floor;
+      if (!acc[floor]) {
+        acc[floor] = [];
+      }
+      
+      // Convert assignments from array to object with date as key
+      const assignments = {};
+      room.assignments.forEach(assignment => {
+        const date = assignment.date.split('T')[0]; // Remove time part
+        assignments[date] = assignment;
+      });
+      
+      acc[floor].push({
+        ...room,
+        assignments
+      });
+      
+      return acc;
+    }, {});
+    
+    // Sort floors and rooms
+    return Object.entries(roomsByFloor)
+      .sort(([a], [b]) => parseInt(a) - parseInt(b))
+      .map(([floor, rooms]) => [
+        floor,
+        rooms.sort((a, b) => {
+          const roomNumA = parseInt(a.room_name.replace(/\D/g, ''));
+          const roomNumB = parseInt(b.room_name.replace(/\D/g, ''));
+          return roomNumA - roomNumB;
+        })
+      ]);
+  };
+
+  // Render room assignments view
+  const renderRoomAssignmentsView = () => {
+    if (!roomData?.getRoomAssignments) {
+      return (
+        <Alert severity="info" sx={{ mt: 3 }}>
+          객실 배정 데이터가 없습니다.
+        </Alert>
+      );
+    }
+    
+    // Process room data to group by floor
+    const roomsByFloor = processRoomData();
+    
+    return (
+      <Box sx={{ mt: 3 }}>
+        <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <IconButton onClick={() => handlePrevMonth()}>
+              <ChevronLeftIcon />
+            </IconButton>
+            <Typography variant="h4" sx={{ mx: 2 }}>
+              {monthDate.format('YYYY년 MM월')}
+            </Typography>
+            <IconButton onClick={() => handleNextMonth()}>
+              <ChevronRightIcon />
+            </IconButton>
+          </Box>
+        </Box>
+        
+        <Card sx={{ mb: 4 }}>
+          <CardHeader 
+            title="객실 배정 현황"
+            subheader={`${startDate.format('YYYY년 MM월 DD일')} ~ ${endDate.format('YYYY년 MM월 DD일')}`}
+            action={
+              <Button
+                variant="contained"
+                color="secondary"
+                startIcon={<PictureAsPdfIcon />}
+                onClick={handleRoomMealPdf}
+                disabled={!selectedReservation || pdfLoading}
+              >
+                {pdfLoading ? '처리 중...' : 'PDF 다운로드'}
+              </Button>
+            }
+          />
+          <Divider />
+          <CardContent>
+            {/* Room assignment table for each floor */}
+            {Object.entries(roomsByFloor).map(([floor, rooms]) => (
+              <Box key={floor} sx={{ mb: 4 }}>
+                <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
+                  {floor} 층
+                </Typography>
+                
+                <TableContainer component={Paper}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell 
+                          align="center"
+                          sx={{ 
+                            bgcolor: 'primary.main', 
+                            color: 'white',
+                            fontWeight: 'bold'
+                          }}
+                        >
+                          호실
+                        </TableCell>
+                        <TableCell 
+                          align="center"
+                          sx={{ 
+                            bgcolor: 'primary.main', 
+                            color: 'white',
+                            fontWeight: 'bold'
+                          }}
+                        >
+                          정원
+                        </TableCell>
+                        {dateRange.map(date => (
+                          <TableCell 
+                            key={date.format('YYYY-MM-DD')} 
+                            align="center"
+                            sx={{ 
+                              bgcolor: date.isSame(moment(), 'day') ? 'warning.main' : 'primary.main', 
+                              color: 'white',
+                              fontWeight: 'bold',
+                              minWidth: 120
+                            }}
+                          >
+                            {date.format('MM/DD')}
+                            <Typography variant="caption" display="block">
+                              ({date.format('ddd')})
+                            </Typography>
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {rooms.map(room => (
+                        <TableRow key={room.room_id}>
+                          <TableCell 
+                            align="center"
+                            sx={{ bgcolor: 'grey.100', fontWeight: 'bold' }}
+                          >
+                            {room.room_name}
+                          </TableCell>
+                          <TableCell 
+                            align="center"
+                            sx={{ bgcolor: 'grey.100' }}
+                          >
+                            {room.capacity}
+                          </TableCell>
+                          {dateRange.map(date => {
+                            const dateStr = date.format('YYYY-MM-DD');
+                            const assignment = room.assignments[dateStr];
+                            
+                            // Filter assignments by selected reservation if one is selected
+                            const showAssignment = !selectedReservation || 
+                              (assignment && assignment.reservation_id === selectedReservation.id);
+                            
+                            return (
+                              <TableCell 
+                                key={dateStr} 
+                                align="center"
+                                onClick={() => handleOpenAssignmentDialog(room, dateStr)}
+                                sx={{ 
+                                  cursor: 'pointer',
+                                  bgcolor: assignment && showAssignment ? 'success.light' : 'white',
+                                  '&:hover': {
+                                    bgcolor: assignment && showAssignment ? 'success.main' : 'grey.200'
+                                  }
+                                }}
+                              >
+                                {assignment && showAssignment ? (
+                                  <Box>
+                                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                                      {assignment.organization}
+                                    </Typography>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                      <Typography variant="body2">
+                                        {assignment.occupancy}명
+                                      </Typography>
+                                      <IconButton 
+                                        size="small" 
+                                        color="error"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDeleteAssignment(room, dateStr);
+                                        }}
+                                      >
+                                        <DeleteIcon fontSize="small" />
+                                      </IconButton>
+                                    </Box>
+                                  </Box>
+                                ) : (
+                                  <Typography variant="body2" color="text.secondary">
+                                    빈방
+                                  </Typography>
+                                )}
+                              </TableCell>
+                            );
+                          })}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Box>
+            ))}
+          </CardContent>
+        </Card>
+      </Box>
+    );
+  };
+
+  // Render meal view
+  const renderMealView = () => {
+    if (!roomData?.getRoomAssignments) {
+      return (
+        <Alert severity="info" sx={{ mt: 3 }}>
+          식사 배정 데이터가 없습니다.
+        </Alert>
+      );
+    }
+    
+    // Generate a list of all organizations in the selected date range
+    const allOrganizations = {};
+    
+    // Extract unique organization names from room assignments
+    roomData.getRoomAssignments.forEach(room => {
+      Object.entries(room.assignments).forEach(([date, assignment]) => {
+        if (moment(date).isBetween(startDate, endDate, 'day', '[]')) {
+          if (!allOrganizations[assignment.organization]) {
+            allOrganizations[assignment.organization] = {
+              name: assignment.organization,
+              reservationId: assignment.reservation_id,
+              dates: {}
+            };
+          }
+          
+          if (!allOrganizations[assignment.organization].dates[date]) {
+            allOrganizations[assignment.organization].dates[date] = {
+              breakfast: 0,
+              lunch: 0,
+              dinner: 0
+            };
+          }
+          
+          // Add occupancy count to all meal types
+          allOrganizations[assignment.organization].dates[date].breakfast += assignment.occupancy;
+          allOrganizations[assignment.organization].dates[date].lunch += assignment.occupancy;
+          allOrganizations[assignment.organization].dates[date].dinner += assignment.occupancy;
+        }
+      });
+    });
+    
+    // Convert to array and filter by selected organization if needed
+    const organizationsArray = Object.values(allOrganizations)
+      .filter(org => !selectedReservation || org.reservationId === selectedReservation.id);
+    
+    if (organizationsArray.length === 0) {
+      return (
+        <Alert severity="info" sx={{ mt: 3 }}>
+          선택한 단체의 식사 데이터가 없습니다.
+        </Alert>
+      );
+    }
+    
+    return (
+      <Box sx={{ mt: 3 }}>
+        <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <IconButton onClick={() => handlePrevMonth()}>
+              <ChevronLeftIcon />
+            </IconButton>
+            <Typography variant="h4" sx={{ mx: 2 }}>
+              {monthDate.format('YYYY년 MM월')}
+            </Typography>
+            <IconButton onClick={() => handleNextMonth()}>
+              <ChevronRightIcon />
+            </IconButton>
+          </Box>
+        </Box>
+        
+        <Card sx={{ mb: 4 }}>
+          <CardHeader 
+            title="식사 배정 현황"
+            subheader={`${startDate.format('YYYY년 MM월 DD일')} ~ ${endDate.format('YYYY년 MM월 DD일')}`}
+            action={
+              <Button
+                variant="contained"
+                color="secondary"
+                startIcon={<PictureAsPdfIcon />}
+                onClick={handleRoomMealPdf}
+                disabled={!selectedReservation || pdfLoading}
+              >
+                {pdfLoading ? '처리 중...' : 'PDF 다운로드'}
+              </Button>
+            }
+          />
+          <Divider />
+          <CardContent>
+            <Grid container spacing={3}>
+              {organizationsArray.map(org => (
+                <Grid item xs={12} key={org.name}>
+                  <Card variant="outlined">
+                    <CardHeader title={org.name} />
+                    <Divider />
+                    <CardContent>
+                      <TableContainer>
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow>
+                              <TableCell sx={{ bgcolor: 'primary.main', color: 'white', fontWeight: 'bold' }}>날짜</TableCell>
+                              <TableCell align="center" sx={{ bgcolor: 'primary.main', color: 'white', fontWeight: 'bold' }}>조식</TableCell>
+                              <TableCell align="center" sx={{ bgcolor: 'primary.main', color: 'white', fontWeight: 'bold' }}>중식</TableCell>
+                              <TableCell align="center" sx={{ bgcolor: 'primary.main', color: 'white', fontWeight: 'bold' }}>석식</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {dateRange.map(date => {
+                              const dateStr = date.format('YYYY-MM-DD');
+                              const mealData = org.dates[dateStr] || { breakfast: 0, lunch: 0, dinner: 0 };
+                              
+                              return (
+                                <TableRow key={dateStr}>
+                                  <TableCell sx={{ bgcolor: date.isSame(moment(), 'day') ? 'warning.light' : 'grey.100' }}>
+                                    {date.format('MM/DD')} ({date.format('ddd')})
+                                  </TableCell>
+                                  <TableCell align="center">{mealData.breakfast > 0 ? mealData.breakfast + '명' : '-'}</TableCell>
+                                  <TableCell align="center">{mealData.lunch > 0 ? mealData.lunch + '명' : '-'}</TableCell>
+                                  <TableCell align="center">{mealData.dinner > 0 ? mealData.dinner + '명' : '-'}</TableCell>
+                                </TableRow>
+                              );
+                            })}
+                            <TableRow>
+                              <TableCell sx={{ fontWeight: 'bold' }}>합계</TableCell>
+                              <TableCell align="center" sx={{ fontWeight: 'bold', bgcolor: 'success.light' }}>
+                                {Object.values(org.dates).reduce((sum, data) => sum + data.breakfast, 0)}명
+                              </TableCell>
+                              <TableCell align="center" sx={{ fontWeight: 'bold', bgcolor: 'success.light' }}>
+                                {Object.values(org.dates).reduce((sum, data) => sum + data.lunch, 0)}명
+                              </TableCell>
+                              <TableCell align="center" sx={{ fontWeight: 'bold', bgcolor: 'success.light' }}>
+                                {Object.values(org.dates).reduce((sum, data) => sum + data.dinner, 0)}명
+                              </TableCell>
+                            </TableRow>
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+          </CardContent>
+        </Card>
+      </Box>
+    );
+  };
+  
+  // Handle search term change
+  const handleSearchChange = (event) => {
+    setSearchTerm(event.target.value);
+  };
+
+  // Filter reservations based on search term
+  const filteredReservations = reservationListData?.getPage1List
+    ? reservationListData.getPage1List.filter(reservation => 
+        reservation.group_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (reservation.customer_name && reservation.customer_name.toLowerCase().includes(searchTerm.toLowerCase())))
+    : [];
+
+  // Month navigation handlers
+  const handlePrevMonth = () => {
+    const newMonthDate = monthDate.clone().subtract(1, 'month');
+    setMonthDate(newMonthDate);
+    setStartDate(newMonthDate.clone().startOf('month'));
+    setEndDate(newMonthDate.clone().endOf('month'));
+  };
+  
+  const handleNextMonth = () => {
+    const newMonthDate = monthDate.clone().add(1, 'month');
+    setMonthDate(newMonthDate);
+    setStartDate(newMonthDate.clone().startOf('month'));
+    setEndDate(newMonthDate.clone().endOf('month'));
+  };
+
+  // Day click handler for opening sidebar
+  const handleDayClick = (day) => {
+    setSelectedDay(day);
+    // Get data for this day
+    const roomsForDay = getRoomsForDay(day);
+    const mealsForDay = getMealsForDay(day);
+    setDayData({ rooms: roomsForDay, meals: mealsForDay });
+    setSidebarOpen(true);
+  };
+  
+  // Close sidebar handler
+  const handleCloseSidebar = () => {
+    setSidebarOpen(false);
+  };
+
+  // Get room assignments for a specific day
+  const getRoomsForDay = (day) => {
+    const dayStr = day.format('YYYY-MM-DD');
+    
+    if (!roomData || !roomData.getRoomAssignments) return [];
+    
+    const roomsWithAssignments = [];
+    
+    roomData.getRoomAssignments.forEach(room => {
+      const assignmentsForDay = room.assignments.filter(assignment => {
+        return assignment.date === dayStr && 
+               (!selectedReservation || assignment.reservation_id === selectedReservation.id || showAllReservations);
+      });
+      
+      if (assignmentsForDay.length > 0) {
+        assignmentsForDay.forEach(assignment => {
+          roomsWithAssignments.push({
+            ...room,
+            assignment
+          });
+        });
+      }
+    });
+    
+    return roomsWithAssignments;
+  };
+  
+  // Get meal data for a specific day
+  const getMealsForDay = (day) => {
+    const dayStr = day.format('YYYY-MM-DD');
+    
+    if (!mealData || !mealData.getMealStaff) return [];
+    
+    return mealData.getMealStaff.filter(meal => {
+      return meal.date === dayStr && 
+             (!selectedReservation || meal.reservation_id === selectedReservation.id || showAllReservations);
+    });
+  };
+  
+  // Get the total occupancy for a day
+  const getTotalOccupancyForDay = (day) => {
+    const rooms = getRoomsForDay(day);
+    return rooms.reduce((sum, room) => sum + (room.assignment?.occupancy || 0), 0);
+  };
+  
+  // Get the total meal counts for a day
+  const getTotalMealsForDay = (day) => {
+    const meals = getMealsForDay(day);
+    
+    const breakfast = meals.filter(m => m.meal_type === 'breakfast')
+      .reduce((sum, m) => sum + (m.total_count || 0), 0);
+    
+    const lunch = meals.filter(m => m.meal_type === 'lunch')
+      .reduce((sum, m) => sum + (m.total_count || 0), 0);
+    
+    const dinner = meals.filter(m => m.meal_type === 'dinner')
+      .reduce((sum, m) => sum + (m.total_count || 0), 0);
+    
+    return { breakfast, lunch, dinner, total: breakfast + lunch + dinner };
+  };
+
+  // Calendar view rendering function
+  const renderCalendarView = () => {
+    const daysInMonth = monthDate.daysInMonth();
+    const firstDayOfMonth = monthDate.clone().startOf('month').day();
+    const calendarDays = [];
+    
+    // Calculate empty cells before the first day of the month
+    for (let i = 0; i < firstDayOfMonth; i++) {
+      calendarDays.push({ day: null, date: null });
+    }
+    
+    // Add the days of the month
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = monthDate.clone().date(day);
+      calendarDays.push({
+        day,
+        date: date
+      });
+    }
+    
+    return (
+      <>
+        <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <IconButton onClick={handlePrevMonth}>
+              <ChevronLeftIcon />
+            </IconButton>
+            <Typography variant="h5" sx={{ mx: 2 }}>
+              {monthDate.format('YYYY년 M월')}
+            </Typography>
+            <IconButton onClick={handleNextMonth}>
+              <ChevronRightIcon />
+            </IconButton>
+          </Box>
+          
+          <Box>
+            <ToggleButtonGroup
+              value={viewType}
+              exclusive
+              onChange={handleViewTypeChange}
+              size="small"
+            >
+              <ToggleButton value="calendar">
+                <Tooltip title="캘린더 보기">
+                  <ViewModuleIcon />
+                </Tooltip>
+              </ToggleButton>
+              <ToggleButton value="list">
+                <Tooltip title="목록 보기">
+                  <ViewListIcon />
+                </Tooltip>
+              </ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
+        </Box>
+      
+        <Box 
+          sx={{ 
+            backgroundColor: '#fff',
+            borderRadius: 1,
+            overflow: 'hidden', 
+            boxShadow: '0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24)' 
+          }}
+        >
+          {/* Header with day names */}
+          <Grid container sx={{ borderBottom: '1px solid #e0e0e0' }}>
+            {DAYS_OF_WEEK.map((day, index) => (
+              <Grid 
+                item 
+                key={index} 
+                xs={12/7} 
+                sx={{ 
+                  p: 1,
+                  backgroundColor: '#f5f5f5',
+                  textAlign: 'center',
+                  fontWeight: 'bold',
+                  color: index === 0 ? 'error.main' : (index === 6 ? 'primary.main' : 'text.primary')
+                }}
+              >
+                {day}
+              </Grid>
+            ))}
+          </Grid>
+          
+          {/* Calendar days */}
+          <Grid container>
+            {calendarDays.map((item, index) => (
+              <Grid 
+                item 
+                key={index} 
+                xs={12/7} 
+                sx={{ 
+                  height: '120px',
+                  border: '1px solid #e0e0e0',
+                  p: 1,
+                  cursor: item.day ? 'pointer' : 'default',
+                  backgroundColor: item.date && item.date.isSame(moment(), 'day') ? 'rgba(66, 165, 245, 0.08)' : 'inherit',
+                  '&:hover': item.day ? { backgroundColor: 'rgba(0, 0, 0, 0.04)' } : {},
+                  position: 'relative'
+                }}
+                onClick={() => item.day && handleDayClick(item.date)}
+              >
+                {item.day && (
+                  <>
+                    <Box sx={{ 
+                      position: 'absolute', 
+                      top: 5, 
+                      left: 5, 
+                      width: '24px',
+                      height: '24px',
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: item.date && item.date.isSame(moment(), 'day') ? 'primary.main' : 'transparent',
+                      color: item.date && item.date.isSame(moment(), 'day') ? 'white' : (
+                        item.date && item.date.day() === 0 ? 'error.main' : (
+                          item.date && item.date.day() === 6 ? 'primary.main' : 'text.primary'
+                        )
+                      )
+                    }}>
+                      {item.day}
+                    </Box>
+                    
+                    <Box sx={{ pt: 3, fontSize: '0.75rem' }}>
+                      {/* Room occupancy */}
+                      {getTotalOccupancyForDay(item.date) > 0 && (
+                        <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                          <HotelIcon sx={{ fontSize: '0.875rem', mr: 0.5, color: 'primary.main' }} />
+                          <Typography variant="caption" color="primary">
+                            {getTotalOccupancyForDay(item.date)}명
+                          </Typography>
+                        </Box>
+                      )}
+                      
+                      {/* Meal counts */}
+                      {getTotalMealsForDay(item.date).total > 0 && (
+                        <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
+                          <RestaurantIcon sx={{ fontSize: '0.875rem', mr: 0.5, color: 'secondary.main' }} />
+                          {getTotalMealsForDay(item.date).breakfast > 0 && (
+                            <Chip 
+                              label={`조식 ${getTotalMealsForDay(item.date).breakfast}`} 
+                              size="small" 
+                              sx={{ 
+                                height: '16px', 
+                                fontSize: '0.625rem', 
+                                backgroundColor: '#fff8e1', 
+                                mr: 0.5,
+                                mb: 0.5 
+                              }} 
+                            />
+                          )}
+                          {getTotalMealsForDay(item.date).lunch > 0 && (
+                            <Chip 
+                              label={`중식 ${getTotalMealsForDay(item.date).lunch}`} 
+                              size="small" 
+                              sx={{ 
+                                height: '16px', 
+                                fontSize: '0.625rem', 
+                                backgroundColor: '#fffde7', 
+                                mr: 0.5,
+                                mb: 0.5 
+                              }} 
+                            />
+                          )}
+                          {getTotalMealsForDay(item.date).dinner > 0 && (
+                            <Chip 
+                              label={`석식 ${getTotalMealsForDay(item.date).dinner}`} 
+                              size="small" 
+                              sx={{ 
+                                height: '16px', 
+                                fontSize: '0.625rem', 
+                                backgroundColor: '#fff3e0', 
+                                mb: 0.5 
+                              }} 
+                            />
+                          )}
+                        </Box>
+                      )}
+                    </Box>
+                  </>
+                )}
+              </Grid>
+            ))}
+          </Grid>
+        </Box>
+      </>
+    );
+  };
+
+  // Sidebar component to show day details
+  const DaySidebar = () => {
+    if (!selectedDay) return null;
+    
+    const formattedDate = selectedDay.format('YYYY년 MM월 DD일');
+    const dayOfWeek = DAYS_OF_WEEK[selectedDay.day()];
+    
+    return (
+      <Box sx={{ width: 320, p: 2 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h6">
+            {formattedDate} ({dayOfWeek})
+          </Typography>
+          <IconButton onClick={handleCloseSidebar}>
+            <ChevronRightIcon />
+          </IconButton>
+        </Box>
+        
+        <Divider sx={{ mb: 2 }} />
+        
+        {/* Room assignments */}
+        <Typography variant="subtitle1" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', mb: 1 }}>
+          <HotelIcon sx={{ mr: 1 }} /> 객실 배정
+        </Typography>
+        
+        {dayData.rooms.length > 0 ? (
+          <List disablePadding>
+            {dayData.rooms.map((room, index) => (
+              <ListItem 
+                key={index} 
+                sx={{ 
+                  borderBottom: '1px solid #e0e0e0', 
+                  py: 1,
+                  px: 0 
+                }}
+              >
+                <ListItemText
+                  primary={
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                        {room.room_name}
+                      </Typography>
+                      <Typography variant="body2">
+                        {room.assignment.occupancy}명
+                      </Typography>
+                    </Box>
+                  }
+                  secondary={
+                    <Typography variant="caption" color="textSecondary">
+                      {room.assignment.organization}
+                    </Typography>
+                  }
+                />
+              </ListItem>
+            ))}
+          </List>
+        ) : (
+          <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+            배정된 객실이 없습니다.
+          </Typography>
+        )}
+        
+        <Divider sx={{ my: 2 }} />
+        
+        {/* Meals */}
+        <Typography variant="subtitle1" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', mb: 1 }}>
+          <RestaurantIcon sx={{ mr: 1 }} /> 식사 인원
+        </Typography>
+        
+        {dayData.meals.length > 0 ? (
+          <List disablePadding>
+            {dayData.meals.map((meal, index) => (
+              <ListItem 
+                key={index} 
+                sx={{ 
+                  borderBottom: '1px solid #e0e0e0', 
+                  py: 1,
+                  px: 0 
+                }}
+              >
+                <ListItemText
+                  primary={
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                        {meal.meal_type === 'breakfast' ? '조식' : 
+                         meal.meal_type === 'lunch' ? '중식' : 
+                         meal.meal_type === 'dinner' ? '석식' : meal.meal_type}
+                      </Typography>
+                      <Typography variant="body2">
+                        총 {meal.total_count}명
+                      </Typography>
+                    </Box>
+                  }
+                  secondary={
+                    <Typography variant="caption" color="textSecondary">
+                      {meal.organization} (성인: {meal.adult_count || 0}, 청소년: {meal.youth_count || 0}, 강사: {meal.instructor_count || 0})
+                    </Typography>
+                  }
+                />
+              </ListItem>
+            ))}
+          </List>
+        ) : (
+          <Typography variant="body2" color="textSecondary">
+            식사 인원이 없습니다.
+          </Typography>
+        )}
+        
+        {selectedReservation && (
+          <Box sx={{ mt: 2 }}>
+            <Button 
+              variant="outlined" 
+              size="small" 
+              fullWidth
+              onClick={() => handleOpenAssignmentDialog(null, selectedDay.format('YYYY-MM-DD'))}
+              startIcon={<HotelIcon />}
+            >
+              객실 배정 추가
+            </Button>
+          </Box>
+        )}
+      </Box>
+    );
+  };
+
+  // Handle inspection tab change
+  const handleInspectionTabChange = (event, newValue) => {
+    setInspectionTabValue(newValue);
+  };
+
+  // Handle inspection search change
+  const handleInspectionSearchChange = (event) => {
+    setInspectionSearchTerm(event.target.value);
+  };
+
+  // Handle selecting a reservation for inspection
+  const handleInspectionReservationSelect = async (reservation) => {
+    setInspectionSelectedReservation(reservation);
+    
+    try {
+      // Get reservation details
+      const { data: detailData } = await client.query({
+        query: GET_PAGE6_RESERVATION_DETAIL,
+        variables: { id: reservation.id },
+        fetchPolicy: 'network-only'
+      });
+      
+      if (!detailData) {
+        throw new Error('예약 상세 정보를 불러올 수 없습니다.');
+      }
+      
+      // Process room data
+      const roomSelections = parseJsonData(detailData.getPage1ById.page3?.room_selections || []);
+      const accommodationResult = createAccommodationSection(roomSelections);
+      setAccommodationData(accommodationResult);
+      
+      // Process meal data
+      const mealPlans = parseJsonData(detailData.getPage1ById.page3?.meal_plans || []);
+      const mealResult = createMealSection(mealPlans);
+      setInspectionMealData(mealResult);
+      
+    } catch (error) {
+      console.error('Data loading error:', error);
+      showAlert('데이터를 불러오는 중 오류가 발생했습니다.', 'error');
+    }
+  };
+
+  // Export accommodation and meal data to Excel
+  const handleInspectionExcelExport = async () => {
+    if (!inspectionSelectedReservation) {
+      showAlert('단체를 먼저 선택해주세요.', 'warning');
+      return;
+    }
+
+    try {
+      setInspectionExcelLoading(true);
+      
+      // Get detailed data
+      const { data: detailData } = await client.query({
+        query: GET_PAGE6_RESERVATION_DETAIL,
+        variables: { id: inspectionSelectedReservation.id },
+        fetchPolicy: 'network-only'
+      });
+      
+      if (!detailData) {
+        throw new Error('예약 상세 정보를 불러올 수 없습니다.');
+      }
+      
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+      
+      // Styles
+      const headerStyle = {
+        font: { bold: true, color: { rgb: '000000' } },
+        fill: { fgColor: { rgb: 'E0E0E0' }, patternType: 'solid' },
+        alignment: { horizontal: 'center', vertical: 'center' }
+      };
+      
+      const defaultStyle = {
+        alignment: { vertical: 'center', horizontal: 'center' },
+        border: {
+          top: { style: 'thin' },
+          bottom: { style: 'thin' },
+          left: { style: 'thin' },
+          right: { style: 'thin' }
+        }
+      };
+      
+      // Create accommodation worksheet to match the UI
+      if (accommodationData.rows.length > 0) {
+        const accommodationData = [
+          ['일자', '타입', '객실수', '제공단가', '소계', '합계'].map(header => ({ v: header, s: headerStyle }))
+        ];
+        
+        accommodationData.rows.forEach(row => {
+          accommodationData.push([
+            { v: row.date, s: defaultStyle },
+            { v: row.roomType, s: defaultStyle },
+            { v: row.roomCount, s: defaultStyle },
+            { v: row.unitPrice, s: defaultStyle },
+            { v: row.subtotal, s: defaultStyle },
+            { v: row.total, s: defaultStyle }
+          ]);
+        });
+        
+        const accommodationWs = XLSX.utils.aoa_to_sheet(accommodationData);
+        XLSX.utils.book_append_sheet(wb, accommodationWs, '숙박정보');
+      }
+      
+      // Create meal worksheet to match the UI
+      if (inspectionMealData.rows.length > 0) {
+        const mealData = [
+          ['날짜', '구분', '메뉴', '인원', '제공단가', '소계', '합계'].map(header => ({ v: header, s: headerStyle }))
+        ];
+        
+        inspectionMealData.rows.forEach(row => {
+          mealData.push([
+            { v: row.date, s: defaultStyle },
+            { v: row.type, s: defaultStyle },
+            { v: row.menu, s: defaultStyle },
+            { v: row.people, s: defaultStyle },
+            { v: row.unitPrice, s: defaultStyle },
+            { v: row.subtotal, s: defaultStyle },
+            { v: row.total, s: defaultStyle }
+          ]);
+        });
+        
+        const mealWs = XLSX.utils.aoa_to_sheet(mealData);
+        XLSX.utils.book_append_sheet(wb, mealWs, '식사정보');
+      }
+      
+      // Save the workbook
+      XLSX.writeFile(wb, `${inspectionSelectedReservation.group_name}_숙식정보_${moment().format('YYYYMMDD')}.xlsx`);
+      
+      showAlert('엑셀 다운로드가 완료되었습니다.', 'success');
+    } catch (error) {
+      console.error('Excel export error:', error);
+      showAlert('엑셀 다운로드 중 오류가 발생했습니다.', 'error');
+    } finally {
+      setInspectionExcelLoading(false);
+    }
+  };
+
+  // Filter reservations for inspection tab
+  const getFilteredReservationsForInspection = () => {
+    if (!reservationListData?.getPage1List) return [];
+    
+    return reservationListData.getPage1List.filter(item => {
+      if (!inspectionSearchTerm) return true;
+      
+      return (
+        (item.group_name && item.group_name.toLowerCase().includes(inspectionSearchTerm.toLowerCase())) ||
+        (item.customer_name && item.customer_name.toLowerCase().includes(inspectionSearchTerm.toLowerCase()))
+      );
+    });
+  };
+
+  // Render the inspection tab content
+  const renderInspectionContent = () => {
+    return (
+      <Box>
+        <Grid container spacing={3}>
+          {/* Left panel - reservation list */}
+          <Grid item xs={12} md={4}>
+            <Paper sx={{ p: 2, height: '100%' }}>
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="h6" sx={{ mb: 1 }}>
+                  <GroupIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+                  단체 목록
+                </Typography>
+                <TextField
+                  fullWidth
+                  size="small"
+                  placeholder="단체명 또는 예약자명 검색..."
+                  value={inspectionSearchTerm}
+                  onChange={handleInspectionSearchChange}
+                  InputProps={{
+                    startAdornment: <SearchIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />,
+                  }}
+                  sx={{ mb: 2 }}
+                />
+                <Button
+                  variant="contained"
+                  disabled={!inspectionSelectedReservation}
+                  onClick={handleInspectionExcelExport}
+                  startIcon={<GetAppIcon />}
+                  fullWidth
+                  sx={{ mb: 2 }}
+                >
+                  {inspectionExcelLoading ? '처리 중...' : '엑셀 다운로드'}
+                </Button>
+              </Box>
+              
+              <Divider sx={{ mb: 2 }} />
+              
+              <Box sx={{ maxHeight: 500, overflow: 'auto' }}>
+                {loadingReservations ? (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+                    <CircularProgress size={24} />
+                  </Box>
+                ) : (
+                  getFilteredReservationsForInspection().map(reservation => (
+                    <Box
+                      key={reservation.id}
+                      sx={{
+                        p: 1.5,
+                        mb: 1,
+                        borderRadius: 1,
+                        cursor: 'pointer',
+                        bgcolor: inspectionSelectedReservation?.id === reservation.id ? 'primary.light' : 'background.paper',
+                        '&:hover': {
+                          bgcolor: inspectionSelectedReservation?.id === reservation.id ? 'primary.light' : 'action.hover',
+                        },
+                        border: '1px solid',
+                        borderColor: inspectionSelectedReservation?.id === reservation.id ? 'primary.main' : 'divider',
+                      }}
+                      onClick={() => handleInspectionReservationSelect(reservation)}
+                    >
+                      <Typography variant="subtitle1" fontWeight="bold">
+                        {reservation.group_name}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {reservation.customer_name || '담당자 미지정'} | {formatDate(reservation.start_date)} ~ {formatDate(reservation.end_date)}
+                      </Typography>
+                      <Box sx={{ mt: 1, display: 'flex', gap: 0.5 }}>
+                        <Chip 
+                          size="small" 
+                          label={`총 ${reservation.total_count || 0}명`} 
+                          color="primary" 
+                          variant="outlined" 
+                        />
+                        <Chip 
+                          size="small" 
+                          label={reservation.business_category || '기타'} 
+                          color="secondary" 
+                          variant="outlined" 
+                        />
+                      </Box>
+                    </Box>
+                  ))
+                )}
+              </Box>
+            </Paper>
+          </Grid>
+          
+          {/* Right panel - detail view */}
+          <Grid item xs={12} md={8}>
+            <Paper sx={{ p: 2, height: '100%' }}>
+              <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+                <Tabs
+                  value={inspectionTabValue}
+                  onChange={handleInspectionTabChange}
+                  variant="fullWidth"
+                >
+                  <Tab 
+                    icon={<HotelIcon />} 
+                    label="숙박 정보" 
+                    iconPosition="start" 
+                  />
+                  <Tab 
+                    icon={<RestaurantIcon />} 
+                    label="식사 정보" 
+                    iconPosition="start" 
+                  />
+                </Tabs>
+              </Box>
+              
+              {inspectionSelectedReservation ? (
+                <>
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="h5" gutterBottom>
+                      {inspectionSelectedReservation.group_name}
+                    </Typography>
+                    <Typography variant="body1" color="text.secondary">
+                      {formatDate(inspectionSelectedReservation.start_date)} ~ {formatDate(inspectionSelectedReservation.end_date)}
+                      {inspectionSelectedReservation.total_count && ` | 총 ${inspectionSelectedReservation.total_count}명`}
+                    </Typography>
+                  </Box>
+                  
+                  <Divider sx={{ mb: 2 }} />
+                  
+                  <TabPanel value={inspectionTabValue} index={0}>
+                    {/* Accommodation section */}
+                    <Typography variant="h6" gutterBottom>
+                      <HotelIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+                      숙박 정보
+                    </Typography>
+                    
+                    {accommodationData.rows.length > 0 ? (
+                      <TableContainer component={Paper} variant="outlined" sx={{ mb: 3 }}>
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow sx={{ bgcolor: 'grey.100' }}>
+                              <TableCell align="center">일자</TableCell>
+                              <TableCell align="center">타입</TableCell>
+                              <TableCell align="center">객실수</TableCell>
+                              <TableCell align="center">제공단가</TableCell>
+                              <TableCell align="center">소계</TableCell>
+                              <TableCell align="center">합계</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {accommodationData.rows.map((row, index) => (
+                              <TableRow key={index}>
+                                <TableCell align="center">{row.date}</TableCell>
+                                <TableCell align="center">{row.roomType}</TableCell>
+                                <TableCell align="center">{row.roomCount}</TableCell>
+                                <TableCell align="right">{formatNumber(row.unitPrice)}원</TableCell>
+                                <TableCell align="right">{formatNumber(row.subtotal)}원</TableCell>
+                                <TableCell align="right">{formatNumber(row.total)}원</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                          <TableFooter>
+                            <TableRow>
+                              <TableCell colSpan={4} align="right">
+                                <Typography variant="subtitle1" fontWeight="bold">총 합계:</Typography>
+                              </TableCell>
+                              <TableCell colSpan={2} align="right">
+                                <Typography variant="subtitle1" fontWeight="bold">
+                                  {formatNumber(accommodationData.totalRoomPrice)}원
+                                </Typography>
+                              </TableCell>
+                            </TableRow>
+                          </TableFooter>
+                        </Table>
+                      </TableContainer>
+                    ) : (
+                      <Alert severity="info" sx={{ mt: 2 }}>
+                        숙박 정보가 없습니다.
+                      </Alert>
+                    )}
+                  </TabPanel>
+                  
+                  <TabPanel value={inspectionTabValue} index={1}>
+                    {/* Meal section */}
+                    <Typography variant="h6" gutterBottom>
+                      <RestaurantIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+                      식사 정보
+                    </Typography>
+                    
+                    {inspectionMealData.rows.length > 0 ? (
+                      <TableContainer component={Paper} variant="outlined" sx={{ mb: 3 }}>
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow sx={{ bgcolor: 'grey.100' }}>
+                              <TableCell align="center">날짜</TableCell>
+                              <TableCell align="center">구분</TableCell>
+                              <TableCell align="center">메뉴</TableCell>
+                              <TableCell align="center">인원</TableCell>
+                              <TableCell align="center">제공단가</TableCell>
+                              <TableCell align="center">소계</TableCell>
+                              <TableCell align="center">합계</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {inspectionMealData.rows.map((row, index) => (
+                              <TableRow key={index}>
+                                <TableCell align="center">{row.date}</TableCell>
+                                <TableCell align="center">{row.type}</TableCell>
+                                <TableCell align="center">{row.menu}</TableCell>
+                                <TableCell align="center">{row.people}</TableCell>
+                                <TableCell align="right">{formatNumber(row.unitPrice)}원</TableCell>
+                                <TableCell align="right">{formatNumber(row.subtotal)}원</TableCell>
+                                <TableCell align="right">{formatNumber(row.total)}원</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                          <TableFooter>
+                            <TableRow>
+                              <TableCell colSpan={5} align="right">
+                                <Typography variant="subtitle1" fontWeight="bold">총 합계:</Typography>
+                              </TableCell>
+                              <TableCell colSpan={2} align="right">
+                                <Typography variant="subtitle1" fontWeight="bold">
+                                  {formatNumber(inspectionMealData.totalMealPrice)}원
+                                </Typography>
+                              </TableCell>
+                            </TableRow>
+                          </TableFooter>
+                        </Table>
+                      </TableContainer>
+                    ) : (
+                      <Alert severity="info" sx={{ mt: 2 }}>
+                        식사 정보가 없습니다.
+                      </Alert>
+                    )}
+                  </TabPanel>
+                </>
+              ) : (
+                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 400 }}>
+                  <Typography color="text.secondary">
+                    왼쪽에서 단체를 선택하세요
+                  </Typography>
+                </Box>
+              )}
+            </Paper>
+          </Grid>
+        </Grid>
+      </Box>
+    );
+  };
+
+  if (loadingReservations) {
+    return (
+      <Page6Layout
+        title="식사/숙소 현황"
+        icon={<HotelIcon fontSize="large" />}
+        activeTab="room-assignment"
+      >
+        <Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}>
+          <CircularProgress />
+          </Box>
+      </Page6Layout>
+    );
+  }
+  
+  if (errorReservations) {
+    return (
+      <Page6Layout
+        title="식사/숙소 현황"
+        icon={<HotelIcon fontSize="large" />}
+        activeTab="room-assignment"
+      >
+        <Alert severity="error">
+          데이터를 불러오는 중 오류가 발생했습니다: {errorReservations.message}
+        </Alert>
+      </Page6Layout>
+    );
+  }
+
+  return (
+    <Page6Layout
+      title="객실 배정 및 식사 현황"
+      icon={<MeetingRoomIcon fontSize="large" />}
+      activeTab="room-assignment"
+    >
+      <Box sx={{ mb: 3 }}>
+        <Tabs 
+          value={tabValue} 
+          onChange={handleTabChange}
+          variant="scrollable"
+          scrollButtons="auto"
+        >
+          <Tab 
+            icon={<CalendarTodayIcon />} 
+            label="객실 배정" 
+            iconPosition="start" 
+          />
+          <Tab 
+            icon={<RestaurantIcon />} 
+            label="식사 현황" 
+            iconPosition="start" 
+          />
+          <Tab 
+            icon={<AssignmentIcon />} 
+            label="단체별 조회" 
+            iconPosition="start" 
+          />
+        </Tabs>
+      </Box>
+      
+      {/* Room assignment tab */}
+      <TabPanel value={tabValue} index={0}>
+        {renderRoomAssignmentsView()}
+      </TabPanel>
+      
+        {/* Meal staff tab */}
+      <TabPanel value={tabValue} index={1}>
+        {renderMealView()}
+      </TabPanel>
+
+      {/* New inspection tab */}
+      <TabPanel value={tabValue} index={2}>
+        {renderInspectionContent()}
+      </TabPanel>
+      
+      {/* Assignment dialog */}
+      <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>객실 배정</DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 0.5 }}>
+            <Grid item xs={12}>
+              <TextField
+                label="객실 정보"
+                value={selectedRoom ? `${selectedRoom.room_name} (정원: ${selectedRoom.capacity}명)` : ''}
+                fullWidth
+                InputProps={{ readOnly: true }}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                label="배정일"
+                value={selectedDate.format('YYYY-MM-DD')}
+                fullWidth
+                InputProps={{ readOnly: true }}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                label="단체명"
+                value={selectedReservation?.group_name || ''}
+                fullWidth
+                InputProps={{ readOnly: true }}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                label="이용 인원"
+                type="number"
+                value={assignmentData.occupancy}
+                onChange={(e) => handleAssignmentDataChange('occupancy', e.target.value)}
+                fullWidth
+                InputProps={{ inputProps: { min: 1 } }}
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseDialog}>취소</Button>
+          <Button 
+            onClick={handleSaveAssignment} 
+            variant="contained" 
+            color="primary"
+            disabled={savingAssignment}
+          >
+            {savingAssignment ? <CircularProgress size={24} /> : '저장'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+      
+      {/* Day details sidebar */}
+      <Drawer
+        anchor="right"
+        open={sidebarOpen}
+        onClose={handleCloseSidebar}
+      >
+        <DaySidebar />
+      </Drawer>
+    </Page6Layout>
+  );
+};
+
+export default RoomAssignmentTab; 

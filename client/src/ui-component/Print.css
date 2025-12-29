@@ -1,0 +1,31 @@
+@media print {
+   body * {
+       visibility: hidden;
+   }
+   .print-section, .print-section * {
+       visibility: visible;
+   }
+   .print-section {
+       border: none !important;
+       -webkit-print-color-adjust: exact;
+       print-color-adjust: exact;
+       position: absolute;
+       left: 0;
+       top: 0;
+       width: 100%;
+   }
+   .print-section table {
+      width: 100%; /* 테이블을 100%로 설정하여 페이지에 맞추려 시도 */
+      table-layout: auto; /* 셀 내용에 따라 자동으로 너비 조정 */
+  }
+   .print-section table td, .print-section table th {
+       font-size: 10px !important;
+       line-height: 11px !important;
+       white-space: normal !important; /* 텍스트 줄 바꿈을 자동으로 처리 */
+       padding: 2px 4px !important; /* 적절한 패딩 추가 */
+       max-width: none !important; /* 최대 너비 제한 해제 */
+   }
+}
+@page {
+   margin: 0.5cm; /* 원하는 마진 크기로 조절 */
+}

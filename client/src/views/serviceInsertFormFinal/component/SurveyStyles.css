@@ -1,0 +1,135 @@
+/* 설문 양식 공통 스타일 */
+.survey-form-container {
+  animation: fadeIn 0.5s ease-in-out;
+}
+
+.survey-section {
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.survey-section:target {
+  background-color: #f9f9ff;
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.12);
+}
+
+/* 섹션 전환 애니메이션 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 활성 섹션 스타일 */
+.section-active {
+  border-left: 4px solid #3f51b5;
+  animation: highlight 1s ease-out;
+}
+
+@keyframes highlight {
+  0% {
+    background-color: rgba(63, 81, 181, 0.1);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+/* 스크롤 힌트 화살표 */
+.scroll-hint {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background-color: #fff;
+  color: #3f51b5;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  z-index: 1000;
+}
+
+.scroll-hint:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+}
+
+/* 테마 색상 */
+:root {
+  --primary-color: #3f51b5;
+  --secondary-color: #f50057;
+  --background-light: #f5f5f5;
+  --text-primary: #212121;
+  --text-secondary: #757575;
+}
+
+/* 반응형 미디어 쿼리 */
+@media (max-width: 600px) {
+  .survey-section {
+    padding: 16px !important;
+  }
+  
+  h5.survey-title {
+    font-size: 1.2rem !important;
+  }
+  
+  h6.section-title {
+    font-size: 1rem !important;
+  }
+}
+
+/* 접근성 향상 */
+.screen-reader-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* 프로그레스 바 커스텀 */
+.progress-btn-number {
+  font-weight: bold;
+  transition: all 0.3s ease;
+}
+
+.progress-btn-active .progress-btn-number {
+  transform: scale(1.2);
+}
+
+/* 입력 필드 포커스 스타일 */
+.survey-section input:focus,
+.survey-section textarea:focus,
+.survey-section select:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(63, 81, 181, 0.2);
+}
+
+/* 필수 필드 표시 */
+.required-field label::after {
+  content: "*";
+  color: var(--secondary-color);
+  margin-left: 4px;
+}
+
+/* 도움말 텍스트 스타일 */
+.helper-text {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  transition: opacity 0.3s ease;
+} 

@@ -2,3 +2,9 @@
  
 
   
+## Start 
+
+root -> npm run dev  (client, servers 둘사 start )
+
+
+ 

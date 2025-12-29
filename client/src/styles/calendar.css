@@ -1,0 +1,149 @@
+/* Calendar styling for print version */
+.calendar-print-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  margin-bottom: 20px;
+}
+
+.calendar-print-table th,
+.calendar-print-table td {
+  border: 1px solid #ddd;
+  padding: 6px;
+  vertical-align: top;
+  height: 80px;
+}
+
+.calendar-print-table th {
+  background-color: #f5f5f5;
+  text-align: center;
+  font-weight: bold;
+  height: 30px;
+}
+
+.calendar-print-table th.sunday {
+  color: #e53935; /* Red for Sunday */
+}
+
+.calendar-print-table th.saturday {
+  color: #1e88e5; /* Blue for Saturday */
+}
+
+.calendar-print-table td.other-month {
+  background-color: #f9f9f9;
+  color: #aaa;
+}
+
+.calendar-print-table td.today {
+  background-color: #e8f5e9;
+}
+
+.calendar-print-table td.sunday .day-number {
+  color: #e53935; /* Red for Sunday */
+}
+
+.calendar-print-table td.saturday .day-number {
+  color: #1e88e5; /* Blue for Saturday */
+}
+
+.calendar-print-table td.holiday .day-number,
+.calendar-print-table td.holiday .holiday-name {
+  color: #e53935; /* Red for holidays */
+}
+
+.calendar-print-table .day-number {
+  font-size: 12px;
+  font-weight: bold;
+  margin-bottom: 4px;
+}
+
+.calendar-print-table .events-container {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.calendar-print-table .event {
+  font-size: 10px;
+  padding: 2px 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  position: relative;
+}
+
+.calendar-print-table .event-start::before {
+  display: none;
+}
+
+.calendar-print-table .event-end::after {
+  display: none;
+}
+
+.calendar-print-table .event:not(.event-start)::before {
+  content: "";
+  position: absolute;
+  width: 5px;
+  height: 100%;
+  background-color: inherit;
+  left: -6px;
+  top: 0;
+}
+
+.calendar-print-table .event:not(.event-end)::after {
+  content: "";
+  position: absolute;
+  width: 5px;
+  height: 100%;
+  background-color: inherit;
+  right: -6px;
+  top: 0;
+}
+
+.calendar-print-table .more-events {
+  font-size: 9px;
+  color: #757575;
+  text-align: right;
+  margin-top: 2px;
+}
+
+/* Special styling for different events */
+.calendar-print-table .event:nth-child(1) {
+  background-color: #c8e6c9; /* Light green */
+}
+
+.calendar-print-table .event:nth-child(2) {
+  background-color: #ffecb3; /* Light yellow */
+}
+
+.calendar-print-table .event:nth-child(3) {
+  background-color: #bbdefb; /* Light blue */
+}
+
+/* Print-specific styles */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  
+  .print-section, .print-section * {
+    visibility: visible;
+  }
+  
+  .print-section {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+  
+  .calendar-print-table {
+    width: 100%;
+    page-break-inside: avoid;
+  }
+  
+  .calendar-print-table th,
+  .calendar-print-table td {
+    page-break-inside: avoid;
+  }
+} 
